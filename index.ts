@@ -141,65 +141,7 @@ async function main() {
     console.error("Get your API key from: https://console.mistral.ai/");
     process.exit(1);
   }
-
-  const audioFilePath = process.argv[2];
-
-  if (audioFilePath && fs.existsSync(audioFilePath)) {
-    // Transcribe local file
-    console.log(`Transcribing file: ${audioFilePath}\n`);
-    
-    try {
-      const result = await transcribeAudio(audioFilePath, {
-        model: "voxtral-mini-latest",
-      });
-
-      console.log("\n=== Transcription Result ===");
-      console.log(result.text);
-      
-      if (result.language) {
-        console.log(`\nDetected language: ${result.language}`);
-      }
-      
-      if (result.duration) {
-        console.log(`Duration: ${result.duration.toFixed(2)} seconds`);
-      }
-      
-      if (result.segments && result.segments.length > 0) {
-        console.log("\n--- Segments ---");
-        result.segments.forEach((seg, i) => {
-          console.log(`[${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s] ${seg.text}`);
-        });
-      }
-    } catch (error) {
-      console.error("Transcription error:", error);
-      process.exit(1);
-    }
-  } else if (audioFilePath) {
-    console.error(`File not found: ${audioFilePath}`);
-    printUsage();
-  } else {
-    printUsage();
-    
-    // Example: transcribe from URL (commented out to avoid unnecessary API calls)
-    /*
-    console.log("\nExample: Transcribing from URL...");
-    const result = await transcribeFromUrl(
-      "https://example.com/audio.mp3",
-      { model: "voxtral-mini-latest" }
-    );
-    console.log(result.text);
-    */
-  }
 }
 
-function printUsage() {
-  console.log("Usage: bun run index.ts <audio-file-path>");
-  console.log("\nSupported formats: mp3, wav, m4a, webm, ogg, flac");
-  console.log("\nAvailable models:");
-  console.log("  - voxtral-mini-latest (fast, efficient)");
-  console.log("  - voxtral-large-latest (higher accuracy)");
-  console.log("\nExample:");
-  console.log("  bun run index.ts recording.mp3");
-}
 
 main().catch(console.error);
