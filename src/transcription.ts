@@ -151,6 +151,56 @@ export async function transcribeSegments(
 }
 
 /**
+ * Validate audio buffer before transcription
+ */
+export function validateBuffer(
+  samples: Int16Array | number[],
+  duration: number
+): ValidationResult {
+  // Check if buffer has samples
+  if (!samples || samples.length === 0) {
+    return {
+      isValid: false,
+      error: "No audio data recorded",
+    };
+  }
+
+  const warnings: string[] = [];
+
+  // Analyze audio content
+  const stats = analyzeAudio(samples);
+
+  // Check for silence
+  if (stats.isSilent) {
+    return {
+      isValid: true,
+      hasContent: false,
+      duration: duration,
+      warnings: ["Audio appears to be silent (no detected signal)"],
+    };
+  }
+
+  // Check for very short recordings
+  if (duration < 0.5) {
+    warnings.push(`Very short recording (${duration.toFixed(2)}s)`);
+  }
+
+  // Check for low audio level
+  if (stats.peakDb < -30) {
+    warnings.push(`Low audio level (peak: ${stats.peakDb.toFixed(1)}dB)`);
+  }
+
+  return {
+    isValid: true,
+    hasContent: true,
+    duration: duration,
+    warnings: warnings.length > 0 ? warnings : undefined,
+  };
+}
+
+import { analyzeAudio } from "./utils/audio.js";
+
+/**
  * Check if transcription result has meaningful content
  */
 export function hasContent(result: TranscriptionResponse): boolean {

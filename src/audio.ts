@@ -74,7 +74,7 @@ async function sendBuffer(
 /**
  * Process the recorded audio buffer
  */
-async function processAudio() {
+async function processAudio(cb = (result: TranscriptionResponse) => {console.log(result);}) {
   const audioBuffer = recorder.getBuffer();
   
   // Validate the buffer first
@@ -101,21 +101,17 @@ async function processAudio() {
     
     // Display results
     if (transcription.text && transcription.text.trim()) {
-      console.log("\n📝 Transcription:");
-      console.log(transcription.text);
-      
-      if (transcription.segments && transcription.segments.length > 0) {
-        console.log("\n📋 Segments:");
-        transcription.segments.forEach((seg) => {
-          console.log(`  [${seg.start.toFixed(2)}s - ${seg.end.toFixed(2)}s] ${seg.text}`);
-        });
-      }
+      cb(transcription);
     } else {
-      console.log("No speech detected in audio");
+      cb({
+        text: "No speech detected in audio",
+      });
     }
   
   } catch (error) {
-    console.error("Transcription error:", error);
+    cb({
+      text: "Transcription error: " + error,
+    });
   }
 }
 
@@ -129,7 +125,9 @@ startListener((event) => {
         recorder.stop();
         isRecording = false;
         // Process the recorded audio
-        processAudio().catch((err) => {
+        processAudio((result) => {
+          console.log(result);
+        }).catch((err) => {
           console.error("Error processing audio:", err);
         });
       } else {
@@ -153,12 +151,8 @@ startListener((event) => {
 
 // Print help on startup
 console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║            ASR Mistral - Audio Recorder                  ║
-╠═══════════════════════════════════════════════════════════╣
-║  [Space]  - Start/Stop recording                         ║
-║  [Escape] - Exit                                         ║
-╚═══════════════════════════════════════════════════════════╝
+  [Space]  - Start/Stop recording
+  [Escape] - Exit
 `);
 
 // Export for external use
