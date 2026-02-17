@@ -1,147 +1,221 @@
 import fs from "fs";
 import path from "path";
+import { Mistral } from "@mistralai/mistralai";
+import { sendBuffer, getBuffer, transcribeBuffer as audioTranscribeBuffer, TranscriptionResponse } from "./src/audio";
 
 /**
- * Example: ASR (Automatic Speech Recognition) with Mistral Voxtral
+ * ASR (Automatic Speech Recognition) with Mistral Voxtral
  * 
  * Mistral's Voxtral model provides speech-to-text transcription capabilities.
- * This example demonstrates how to transcribe audio files using Mistral's API.
- * 
- * Note: The @ai-sdk/mistral package doesn't yet support transcription models,
- * so we use the Mistral API directly.
+ * This module provides functions to transcribe audio files and buffers.
  */
 
-// Mistral API configuration
-const MISTRAL_API_URL = "https://api.mistral.ai/v1";
+// Re-export the sendBuffer function for external use
+export { sendBuffer, getBuffer } from "./src/audio";
 
-interface TranscriptionResponse {
-  text: string;
-  language?: string;
-  duration?: number;
-  segments?: Array<{
-    text: string;
-    start: number;
-    end: number;
-  }>;
+// Re-export TranscriptionResponse type
+export type { TranscriptionResponse } from "./src/audio";
+
+/**
+ * Get or create Mistral client
+ */
+function getMistralClient(): Mistral {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("MISTRAL_API_KEY environment variable is required");
+  }
+  
+  return new Mistral({ apiKey });
 }
 
 /**
- * Transcribe audio using Mistral's Voxtral model
+ * Transcribe audio file using Mistral's Voxtral model
  */
-async function transcribeAudio(
+export async function transcribeFile(
   audioPath: string,
   options: {
     model?: string;
     language?: string;
   } = {}
 ): Promise<TranscriptionResponse> {
-  const apiKey = process.env.MISTRAL_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("MISTRAL_API_KEY environment variable is required");
-  }
-
+  const client = getMistralClient();
   const model = options.model || "voxtral-mini-latest";
   
   // Read the audio file
   const audioBuffer = fs.readFileSync(audioPath);
   const ext = path.extname(audioPath).toLowerCase().slice(1);
   
-  // Map file extension to MIME type
-  const mimeTypes: Record<string, string> = {
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    m4a: "audio/mp4",
-    webm: "audio/webm",
-    ogg: "audio/ogg",
-    flac: "audio/flac",
-  };
-  
-  const mimeType = mimeTypes[ext] || "audio/mpeg";
-  const base64Audio = audioBuffer.toString("base64");
-  const dataUri = `data:${mimeType};base64,${base64Audio}`;
-
   console.log(`Using model: ${model}`);
-  console.log(`Audio format: ${mimeType}`);
+  console.log(`Audio format: audio/${ext}`);
   console.log("Sending request to Mistral API...");
-
-  const response = await fetch(`${MISTRAL_API_URL}/audio/transcriptions`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  
+  const response = await client.audio.transcriptions.complete({
+    model: model,
+    file: {
+      fileName: path.basename(audioPath),
+      content: audioBuffer,
     },
-    body: JSON.stringify({
-      model: model,
-      file: dataUri,
-      language: options.language,
-    }),
+    language: options.language,
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
-  }
-
-  return response.json() as Promise<TranscriptionResponse>;
+  
+  return {
+    text: response.text,
+    language: response.language ?? undefined,
+    segments: response.segments?.map((seg) => ({
+      text: seg.text,
+      start: seg.start,
+      end: seg.end,
+    })),
+  };
 }
 
 /**
  * Transcribe audio from URL
  */
-async function transcribeFromUrl(
+export async function transcribeFromUrl(
   audioUrl: string,
   options: {
     model?: string;
     language?: string;
   } = {}
 ): Promise<TranscriptionResponse> {
-  const apiKey = process.env.MISTRAL_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("MISTRAL_API_KEY environment variable is required");
-  }
-
+  const client = getMistralClient();
   const model = options.model || "voxtral-mini-latest";
-
+  
   console.log(`Using model: ${model}`);
   console.log(`Audio URL: ${audioUrl}`);
   console.log("Sending request to Mistral API...");
-
-  const response = await fetch(`${MISTRAL_API_URL}/audio/transcriptions`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: model,
-      url: audioUrl,
-      language: options.language,
-    }),
-  });
-
+  
+  // Download the audio file first
+  const response = await fetch(audioUrl);
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
+    throw new Error(`Failed to fetch audio from URL: ${response.status}`);
   }
-
-  return response.json() as Promise<TranscriptionResponse>;
+  const audioBuffer = Buffer.from(await response.arrayBuffer());
+  
+  const transcriptionResponse = await client.audio.transcriptions.complete({
+    model: model,
+    file: {
+      fileName: "audio.mp3",
+      content: audioBuffer,
+    },
+    language: options.language,
+  });
+  
+  return {
+    text: transcriptionResponse.text,
+    language: transcriptionResponse.language ?? undefined,
+    segments: transcriptionResponse.segments?.map((seg) => ({
+      text: seg.text,
+      start: seg.start,
+      end: seg.end,
+    })),
+  };
 }
 
 /**
- * Main function
+ * Transcribe audio from a SamplesBuffer
+ * This is the main function for transcribing recorded audio
+ */
+export async function transcribeBufferDirect(
+  buffer: Parameters<typeof sendBuffer>[0],
+  options?: Parameters<typeof sendBuffer>[1]
+): Promise<TranscriptionResponse> {
+  return audioTranscribeBuffer(options);
+}
+
+/**
+ * Format seconds to subtitle timestamp (HH:MM:SS.mmm or MM:SS.mmm)
+ */
+export function formatTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms
+      .toString()
+      .padStart(3, "0")}`;
+  }
+  return `${minutes.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
+}
+
+/**
+ * Print transcription result with optional segments
+ */
+export function printTranscription(result: TranscriptionResponse): void {
+  console.log("\n========== TRANSCRIPTION ==========");
+  console.log(result.text);
+  console.log("====================================\n");
+  
+  if (result.language) {
+    console.log(`Detected language: ${result.language}`);
+  }
+  
+  if (result.segments && result.segments.length > 0) {
+    console.log("\n--- Subtitles with timestamps ---");
+    for (const seg of result.segments) {
+      const startTime = formatTime(seg.start);
+      const endTime = formatTime(seg.end);
+      console.log(`[${startTime} -> ${endTime}] ${seg.text}`);
+    }
+    console.log("----------------------------------\n");
+  }
+}
+
+/**
+ * Main function - CLI entry point
  */
 async function main() {
   console.log("=== Mistral ASR (Voxtral) Example ===\n");
-
+  
   // Check for API key
   if (!process.env.MISTRAL_API_KEY) {
     console.error("Error: MISTRAL_API_KEY environment variable is required");
     console.error("Get your API key from: https://console.mistral.ai/");
     process.exit(1);
   }
+  
+  const audioFilePath = process.argv[2];
+  
+  if (audioFilePath && fs.existsSync(audioFilePath)) {
+    // Transcribe local file
+    console.log(`Transcribing file: ${audioFilePath}\n`);
+    
+    try {
+      const result = await transcribeFile(audioFilePath, {
+        model: "voxtral-mini-latest",
+      });
+      
+      printTranscription(result);
+    } catch (error) {
+      console.error("Transcription error:", error);
+      process.exit(1);
+    }
+  } else if (audioFilePath) {
+    console.error(`File not found: ${audioFilePath}`);
+    printUsage();
+  } else {
+    printUsage();
+  }
 }
 
+function printUsage() {
+  console.log("Usage: bun run index.ts <audio-file-path>");
+  console.log("\nSupported formats: mp3, wav, m4a, webm, ogg, flac");
+  console.log("\nAvailable models:");
+  console.log("  - voxtral-mini-latest (fast, efficient)");
+  console.log("  - voxtral-large-latest (higher accuracy)");
+  console.log("\nFor interactive recording, run: bun run src/audio.ts");
+  console.log("\nExample:");
+  console.log("  bun run index.ts recording.mp3");
+}
 
+// Run main if executed directly
 main().catch(console.error);

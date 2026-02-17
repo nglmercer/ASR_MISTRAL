@@ -1,9 +1,8 @@
 import { AudioRecorder, SamplesBuffer } from "miniaudio_node";
 import { startListener, KeyCode } from "rdev-node";
+import { Mistral } from "@mistralai/mistralai";
 
-const MISTRAL_API_URL = "https://api.mistral.ai/v1";
-
-interface TranscriptionResponse {
+export interface TranscriptionResponse {
   text: string;
   language?: string;
   duration?: number;
@@ -26,7 +25,10 @@ startListener((event) => {
       if (isRecording) {
         recorder.stop();
         isRecording = false;
-        printAudioBuffer();
+        // Handle async function in event listener
+        printAudioBuffer().catch((err) => {
+          console.error("Transcription error:", err);
+        });
       } else {
         recorder.start();
         isRecording = true;
@@ -39,9 +41,59 @@ startListener((event) => {
   return event;
 });
 
-function printAudioBuffer() {
+async function printAudioBuffer() {
   const audioBuffer = recorder.getBuffer();
-  console.log(audioBuffer);
+  
+  // Get buffer info
+  const duration = audioBuffer.getDuration();
+  const sampleRate = audioBuffer.getSampleRate();
+  
+  console.log("\n--- Sending audio to Mistral API ---");
+  console.log(`Duration: ${duration.toFixed(2)}s | Sample rate: ${sampleRate} Hz`);
+  
+  try {
+    const transcription = await sendBuffer(audioBuffer);
+    
+    // Print subtitles
+    console.log("\n========== TRANSCRIPTION ==========");
+    console.log(transcription.text);
+    console.log("====================================\n");
+    
+    // If we have segments, print them with timestamps
+    if (transcription.segments && transcription.segments.length > 0) {
+      console.log("--- Subtitles with timestamps ---");
+      for (const seg of transcription.segments) {
+        const startTime = formatTime(seg.start);
+        const endTime = formatTime(seg.end);
+        console.log(`[${startTime} -> ${endTime}] ${seg.text}`);
+      }
+      console.log("----------------------------------\n");
+    }
+    
+  } catch (error) {
+    console.error("Transcription error:", error);
+  }
+}
+
+/**
+ * Format seconds to HH:MM:SS.mmm
+ */
+function formatTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms
+      .toString()
+      .padStart(3, "0")}`;
+  }
+  return `${minutes.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
 }
 
 /**
@@ -103,6 +155,19 @@ function writeString(view: DataView, offset: number, str: string): void {
 }
 
 /**
+ * Get or create Mistral client
+ */
+function getMistralClient(): Mistral {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("MISTRAL_API_KEY environment variable is required");
+  }
+  
+  return new Mistral({ apiKey });
+}
+
+/**
  * Send SamplesBuffer to Mistral API for transcription
  */
 export async function sendBuffer(
@@ -112,20 +177,11 @@ export async function sendBuffer(
     language?: string;
   } = {}
 ): Promise<TranscriptionResponse> {
-  const apiKey = process.env.MISTRAL_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("MISTRAL_API_KEY environment variable is required");
-  }
-  
+  const client = getMistralClient();
   const model = options.model || "voxtral-mini-latest";
   
   // Convert buffer to WAV bytes
   const wavBytes = samplesBufferToWav(buffer);
-  
-  // Convert to base64
-  const base64Audio = btoa(String.fromCharCode(...wavBytes));
-  const dataUri = `data:audio/wav;base64,${base64Audio}`;
   
   console.log(`Using model: ${model}`);
   console.log(`Audio format: audio/wav`);
@@ -134,25 +190,24 @@ export async function sendBuffer(
   console.log(`Channels: ${buffer.getChannels()}`);
   console.log("Sending request to Mistral API...");
   
-  const response = await fetch(`${MISTRAL_API_URL}/audio/transcriptions`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const response = await client.audio.transcriptions.complete({
+    model: model,
+    file: {
+      fileName: "recording.wav",
+      content: wavBytes,
     },
-    body: JSON.stringify({
-      model: model,
-      file: dataUri,
-      language: options.language,
-    }),
+    language: options.language,
   });
   
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
-  }
-  
-  return response.json() as Promise<TranscriptionResponse>;
+  return {
+    text: response.text,
+    language: response.language ?? undefined,
+    segments: response.segments?.map((seg) => ({
+      text: seg.text,
+      start: seg.start,
+      end: seg.end,
+    })),
+  };
 }
 
 /**
