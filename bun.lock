@@ -7,6 +7,8 @@
       "dependencies": {
         "@ai-sdk/mistral": "^3.0.20",
         "ai": "^6.0.86",
+        "miniaudio_node": "^1.6.0",
+        "rdev-node": "^1.0.1",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -42,6 +44,10 @@
     "eventsource-parser": ["eventsource-parser@3.0.6", "", {}, "sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg=="],
 
     "json-schema": ["json-schema@0.4.0", "", {}, "sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA=="],
+
+    "miniaudio_node": ["miniaudio_node@1.6.0", "", {}, "sha512-KCjr6PMBwEI6iFVMgOpLFnS6UL3u2xywZ2M3nWko8GNBwwJX2K29Kl0x06qRVGZwRiOwIKdWFgARYa2MlPvm1w=="],
+
+    "rdev-node": ["rdev-node@1.0.1", "", {}, "sha512-QKqb1+vseGLq7McOQX7K9vZmRx5hT7y24oTrU//S6jV1kTpi7C0+xchRHOECkG0nD2bnKpz5CUI9XyXazVGPDQ=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

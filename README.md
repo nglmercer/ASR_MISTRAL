@@ -1,6 +1,6 @@
 # ASR with Mistral (Voxtral)
 
-This example demonstrates how to use Mistral's Voxtral model for Automatic Speech Recognition (ASR) using the AI SDK.
+This example demonstrates how to use Mistral's Voxtral model for Automatic Speech Recognition (ASR).
 
 ## Prerequisites
 
@@ -34,37 +34,50 @@ bun run index.ts /path/to/audio.mp3
 - OGG (`audio/ogg`)
 - FLAC (`audio/flac`)
 
-## Code Example
-
-```typescript
-import { mistral } from "@ai-sdk/mistral";
-import { transcribe } from "ai";
-import fs from "fs";
-
-const audioBuffer = fs.readFileSync("audio.mp3");
-
-const result = await transcribe({
-  model: mistral.transcription("voxtral-mini-latest"),
-  audio: audioBuffer,
-  mediaType: "audio/mpeg",
-});
-
-console.log(result.text);
-```
-
 ## Available Models
 
 - `voxtral-mini-latest` - Fast and efficient transcription model
 - `voxtral-large-latest` - Higher accuracy for complex audio
 
+## Code Example
+
+```typescript
+import fs from "fs";
+
+const MISTRAL_API_URL = "https://api.mistral.ai/v1";
+
+async function transcribeAudio(audioPath: string) {
+  const audioBuffer = fs.readFileSync(audioPath);
+  const base64Audio = audioBuffer.toString("base64");
+  const dataUri = `data:audio/mpeg;base64,${base64Audio}`;
+
+  const response = await fetch(`${MISTRAL_API_URL}/audio/transcriptions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "voxtral-mini-latest",
+      file: dataUri,
+    }),
+  });
+
+  return response.json();
+}
+
+const result = await transcribeAudio("audio.mp3");
+console.log(result.text);
+```
+
 ## Features
 
 - Automatic language detection
-- Timestamp support
+- Timestamp segments
 - Multiple audio format support
 - URL-based transcription
 
 ## Resources
 
 - [Mistral AI Documentation](https://docs.mistral.ai/)
-- [AI SDK Documentation](https://sdk.vercel.ai/docs)
+- [Voxtral API Reference](https://docs.mistral.ai/capabilities/speech_to_text/)

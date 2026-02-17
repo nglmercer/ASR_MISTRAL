@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@ai-sdk/mistral": "^3.0.20",
-    "ai": "^6.0.86"
+    "ai": "^6.0.86",
+    "miniaudio_node": "^1.6.0",
+    "rdev-node": "^1.0.1"
   }
 }
