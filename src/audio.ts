@@ -114,20 +114,22 @@ async function processAudio(cb = (result: TranscriptionResponse) => {console.log
     });
   }
 }
-
-// Setup keyboard listener
-startListener((event) => {
-  const { keyPress } = event;
-  
-  if (keyPress) {
+if (import.meta.main) {
+    main();
+}
+export function main(cb = (result: TranscriptionResponse) => {console.log(result);}) {
+    
+    // Setup keyboard listener
+    startListener((event) => {
+      const { keyPress } = event;
+      
+      if (keyPress) {
     if (keyPress.key === KeyCode.Space) {
       if (isRecording) {
         recorder.stop();
         isRecording = false;
         // Process the recorded audio
-        processAudio((result) => {
-          console.log(result);
-        }).catch((err) => {
+        processAudio(cb).catch((err) => {
           console.error("Error processing audio:", err);
         });
       } else {
@@ -146,14 +148,14 @@ startListener((event) => {
     }
   }
   
-  return event;
-});
+    return event;
+  });
 
-// Print help on startup
-console.log(`
-  [Space]  - Start/Stop recording
-  [Escape] - Exit
-`);
-
+  // Print help on startup
+  console.log(`
+    [Space]  - Start/Stop recording
+    [Escape] - Exit
+  `);
+}
 // Export for external use
 export { recorder, isRecording, sendBuffer };
